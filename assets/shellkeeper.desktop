@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ShellKeeper
+GenericName=SSH Manager
+Comment=Fast SSH connection manager with embedded terminal
+Exec=shellkeeper
+Icon=shellkeeper
+Terminal=false
+Categories=Network;RemoteAccess;System;
+Keywords=ssh;terminal;remote;connection;server;shellkeeper;
+StartupNotify=true
+StartupWMClass=shellkeeper

@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <filter id="glow-cyan-hard" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b1"/>
+      <feGaussianBlur stdDeviation="8" result="b2"/>
+      <feGaussianBlur stdDeviation="18" result="b3"/>
+      <feMerge>
+        <feMergeNode in="b3"/>
+        <feMergeNode in="b2"/>
+        <feMergeNode in="b1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-green-hard" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="b1"/>
+      <feGaussianBlur stdDeviation="10" result="b2"/>
+      <feGaussianBlur stdDeviation="22" result="b3"/>
+      <feMerge>
+        <feMergeNode in="b3"/>
+        <feMergeNode in="b2"/>
+        <feMergeNode in="b1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-dot" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="5" result="b1"/>
+      <feMerge>
+        <feMergeNode in="b1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="bg-grad" cx="50%" cy="50%" r="60%">
+      <stop offset="0%"   stop-color="#0a1e1c"/>
+      <stop offset="100%" stop-color="#040a0e"/>
+    </radialGradient>
+    <!-- Scanline subtle gradient -->
+    <linearGradient id="scan-fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#00ffd0" stop-opacity="0.06"/>
+      <stop offset="50%"  stop-color="#00ffd0" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#00ffd0" stop-opacity="0.06"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="88" fill="url(#bg-grad)"/>
+
+  <!-- Grid lines — very subtle -->
+  <g stroke="#0d2826" stroke-width="1" opacity="0.7">
+    <line x1="85" y1="0" x2="85" y2="512"/>
+    <line x1="170" y1="0" x2="170" y2="512"/>
+    <line x1="256" y1="0" x2="256" y2="512"/>
+    <line x1="342" y1="0" x2="342" y2="512"/>
+    <line x1="427" y1="0" x2="427" y2="512"/>
+    <line x1="0" y1="85" x2="512" y2="85"/>
+    <line x1="0" y1="170" x2="512" y2="170"/>
+    <line x1="0" y1="256" x2="512" y2="256"/>
+    <line x1="0" y1="342" x2="512" y2="342"/>
+    <line x1="0" y1="427" x2="512" y2="427"/>
+  </g>
+
+  <!-- Scanline overlay -->
+  <rect width="512" height="512" rx="88" fill="url(#scan-fade)" opacity="0.8"/>
+
+  <!-- Outer hex ring — dim -->
+  <polygon
+    points="256,44 444,148 444,364 256,468 68,364 68,148"
+    fill="none" stroke="#003830" stroke-width="2"
+  />
+
+  <!-- Circuit corner accents — top left -->
+  <g stroke="#00ffd0" stroke-width="1.8" fill="none" opacity="0.5">
+    <polyline points="68,148 40,132 40,82 88,82"/>
+    <line x1="88" y1="74" x2="88" y2="90"/>
+    <!-- top right -->
+    <polyline points="444,148 472,132 472,82 424,82"/>
+    <line x1="424" y1="74" x2="424" y2="90"/>
+    <!-- bottom left -->
+    <polyline points="68,364 40,380 40,430 88,430"/>
+    <line x1="88" y1="422" x2="88" y2="438"/>
+    <!-- bottom right -->
+    <polyline points="444,364 472,380 472,430 424,430"/>
+    <line x1="424" y1="422" x2="424" y2="438"/>
+  </g>
+
+  <!-- Small accent dots at circuit endpoints -->
+  <g fill="#00ffd0" opacity="0.6" filter="url(#glow-dot)">
+    <circle cx="88"  cy="82"  r="3.5"/>
+    <circle cx="424" cy="82"  r="3.5"/>
+    <circle cx="88"  cy="430" r="3.5"/>
+    <circle cx="424" cy="430" r="3.5"/>
+  </g>
+
+  <!-- Main hex — outer glow layer (thick, soft) -->
+  <polygon
+    points="256,64 428,162 428,350 256,448 84,350 84,162"
+    fill="none"
+    stroke="#00ffd0"
+    stroke-width="1"
+    opacity="0.3"
+    filter="url(#glow-cyan-hard)"
+  />
+
+  <!-- Main hex — sharp border -->
+  <polygon
+    points="256,64 428,162 428,350 256,448 84,350 84,162"
+    fill="#001a16"
+    fill-opacity="0.55"
+    stroke="#00ffd0"
+    stroke-width="3"
+  />
+
+  <!-- Hex inner thin ring -->
+  <polygon
+    points="256,80 412,170 412,342 256,432 100,342 100,170"
+    fill="none"
+    stroke="#00ffd0"
+    stroke-width="0.8"
+    opacity="0.2"
+  />
+
+  <!-- Horizontal divider across hex -->
+  <line x1="84" y1="256" x2="428" y2="256"
+    stroke="#00ffd0" stroke-width="0.8" opacity="0.12"/>
+
+  <!-- >_ prompt — glow layers first -->
+  <!-- > chevron glow -->
+  <polyline
+    points="108,204 185,256 108,308"
+    fill="none" stroke="#00ff88" stroke-width="38"
+    stroke-linecap="round" stroke-linejoin="round"
+    opacity="0.12" filter="url(#glow-green-hard)"
+  />
+  <!-- _ underscore glow -->
+  <line x1="208" y1="310" x2="310" y2="310"
+    stroke="#00ff88" stroke-width="34"
+    stroke-linecap="round" opacity="0.12"
+    filter="url(#glow-green-hard)"
+  />
+
+  <!-- > chevron — crisp -->
+  <polyline
+    points="108,204 185,256 108,308"
+    fill="none" stroke="#00ff88" stroke-width="30"
+    stroke-linecap="round" stroke-linejoin="round"
+    filter="url(#glow-green-hard)"
+  />
+  <!-- _ underscore — crisp -->
+  <line x1="208" y1="310" x2="310" y2="310"
+    stroke="#00ff88" stroke-width="26"
+    stroke-linecap="round"
+    filter="url(#glow-green-hard)"
+  />
+
+  <!-- Hex vertex dots — glowing -->
+  <g fill="#00ffd0" filter="url(#glow-cyan-hard)">
+    <circle cx="256" cy="64"  r="5"/>
+    <circle cx="428" cy="162" r="5"/>
+    <circle cx="428" cy="350" r="5"/>
+    <circle cx="256" cy="448" r="5"/>
+    <circle cx="84"  cy="350" r="5"/>
+    <circle cx="84"  cy="162" r="5"/>
+  </g>
+</svg>
