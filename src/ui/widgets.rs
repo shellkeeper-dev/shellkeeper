@@ -232,7 +232,11 @@ impl<'a> egui::Widget for ConnectionItem<'a> {
             egui::Align2::LEFT_TOP,
             self.subtitle,
             FontId::monospace(11.0),
-            if is_lit { c::MUTED().linear_multiply(1.5) } else { c::MUTED() },
+            if is_lit {
+                c::MUTED().linear_multiply(1.5)
+            } else {
+                c::MUTED()
+            },
         );
 
         resp
