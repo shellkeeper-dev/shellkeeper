@@ -10,8 +10,17 @@ permissions:
 
 jobs:
   build-linux:
-    name: Build Linux
-    runs-on: ubuntu-22.04
+    name: Build Linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x86_64
+            artifact_suffix: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            artifact_suffix: linux-aarch64
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +34,8 @@ jobs:
             libgles2-mesa-dev \
             libsecret-1-dev \
             libdbus-1-dev \
-            libssl-dev
+            libssl-dev \
+            rpm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -37,27 +47,31 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: linux-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ matrix.arch }}-cargo-${{ hashFiles('Cargo.lock') }}
 
       - name: Build release binary
         run: cargo build --release
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
+      - name: Install cargo-deb and cargo-generate-rpm
+        run: cargo install cargo-deb cargo-generate-rpm
 
       - name: Build .deb package
         run: cargo deb
 
+      - name: Build .rpm package
+        run: cargo generate-rpm
+
       - name: Rename binary
-        run: cp target/release/shellkeeper shellkeeper-linux-x86_64
+        run: cp target/release/shellkeeper shellkeeper-${{ matrix.artifact_suffix }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-artifacts
+          name: ${{ matrix.artifact_suffix }}-artifacts
           path: |
-            shellkeeper-linux-x86_64
+            shellkeeper-${{ matrix.artifact_suffix }}
             target/debian/*.deb
+            target/generate-rpm/*.rpm
 
   build-macos:
     name: Build macOS (${{ matrix.target }})
@@ -113,7 +127,9 @@ jobs:
         with:
           files: |
             shellkeeper-linux-x86_64
+            shellkeeper-linux-aarch64
             shellkeeper-macos-x86_64
             shellkeeper-macos-aarch64
             *.deb
+            *.rpm
           generate_release_notes: true

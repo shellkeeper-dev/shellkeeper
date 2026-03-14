@@ -61,6 +61,27 @@ keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
 
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/shellkeeper", dest = "/usr/bin/shellkeeper", mode = "755" },
+    { source = "assets/icons/shellkeeper_16.png",  dest = "/usr/share/icons/hicolor/16x16/apps/shellkeeper.png",    mode = "644" },
+    { source = "assets/icons/shellkeeper_24.png",  dest = "/usr/share/icons/hicolor/24x24/apps/shellkeeper.png",    mode = "644" },
+    { source = "assets/icons/shellkeeper_32.png",  dest = "/usr/share/icons/hicolor/32x32/apps/shellkeeper.png",    mode = "644" },
+    { source = "assets/icons/shellkeeper_48.png",  dest = "/usr/share/icons/hicolor/48x48/apps/shellkeeper.png",    mode = "644" },
+    { source = "assets/icons/shellkeeper_64.png",  dest = "/usr/share/icons/hicolor/64x64/apps/shellkeeper.png",    mode = "644" },
+    { source = "assets/icons/shellkeeper_128.png", dest = "/usr/share/icons/hicolor/128x128/apps/shellkeeper.png",  mode = "644" },
+    { source = "assets/icons/shellkeeper_256.png", dest = "/usr/share/icons/hicolor/256x256/apps/shellkeeper.png",  mode = "644" },
+    { source = "assets/icons/shellkeeper_512.png", dest = "/usr/share/icons/hicolor/512x512/apps/shellkeeper.png",  mode = "644" },
+    { source = "assets/shellkeeper.desktop",       dest = "/usr/share/applications/shellkeeper.desktop",            mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+openssh-clients = "*"
+tmux = "*"
+sshfs = "*"
+sshpass = "*"
+libsecret = "*"
+
 [profile.release]
 opt-level = 3
 lto = true
