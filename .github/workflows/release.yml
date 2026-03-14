@@ -3,205 +3,117 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   contents: write
 
-env:
-  CARGO_TERM_COLOR: always
-  BINARY_NAME: shellkeeper
-
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
+    name: Build Linux
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxkbcommon-dev libssl-dev pkg-config build-essential \
-            libfontconfig1-dev libdbus-1-dev
+            pkg-config \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgles2-mesa-dev \
+            libsecret-1-dev \
+            libdbus-1-dev \
+            libssl-dev
 
-      - name: Install cross-compilation tools (aarch64)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            libxcb-render0-dev:arm64 libxcb-shape0-dev:arm64 \
-            libxcb-xfixes0-dev:arm64 libxkbcommon-dev:arm64 \
-            libssl-dev:arm64 libfontconfig1-dev:arm64 libdbus-1-dev:arm64 || true
-          # Fall back to cross if native cross-compile deps are unavailable
-          cargo install cross --git https://github.com/cross-rs/cross
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry & build
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-cargo-
+          key: linux-cargo-${{ hashFiles('Cargo.lock') }}
 
-      - name: Build release (native)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build release binary
+        run: cargo build --release
 
-      - name: Build release (cross)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: cross build --release --target ${{ matrix.target }}
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
 
-      - name: Build .deb package (x86_64 only)
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: |
-          cargo install cargo-deb
-          cargo deb
+      - name: Build .deb package
+        run: cargo deb
 
-      - name: Package tarball
-        run: |
-          ARCHIVE="${BINARY_NAME}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
-          tar -czf "${ARCHIVE}" \
-            -C target/${{ matrix.target }}/release "${BINARY_NAME}" \
-            -C "${GITHUB_WORKSPACE}" \
-            assets/shellkeeper.desktop \
-            assets/icons/shellkeeper_256.png \
-            LICENSE README.md
-          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+      - name: Rename binary
+        run: cp target/release/shellkeeper shellkeeper-linux-x86_64
 
-      - name: Upload tarball artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARCHIVE }}
-          path: ${{ env.ARCHIVE }}
-
-      - name: Upload .deb artifact
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-artifact@v4
-        with:
-          name: shellkeeper-deb
-          path: target/debian/*.deb
+          name: linux-artifacts
+          path: |
+            shellkeeper-linux-x86_64
+            target/debian/*.deb
 
   build-macos:
+    name: Build macOS (${{ matrix.target }})
     runs-on: macos-latest
     strategy:
       matrix:
-        target: [x86_64-apple-darwin, aarch64-apple-darwin]
+        include:
+          - target: x86_64-apple-darwin
+            artifact: shellkeeper-macos-x86_64
+          - target: aarch64-apple-darwin
+            artifact: shellkeeper-macos-aarch64
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo registry & build
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-cargo-
+          key: ${{ matrix.target }}-cargo-${{ hashFiles('Cargo.lock') }}
 
-      - name: Build release
+      - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Create macOS app bundle
-        run: |
-          APP="ShellKeeper.app"
-          mkdir -p "${APP}/Contents/MacOS"
-          mkdir -p "${APP}/Contents/Resources"
-
-          cp target/${{ matrix.target }}/release/${BINARY_NAME} "${APP}/Contents/MacOS/${BINARY_NAME}"
-
-          # Convert PNG to icns
-          mkdir -p shellkeeper.iconset
-          cp assets/icons/shellkeeper_16.png   shellkeeper.iconset/icon_16x16.png
-          cp assets/icons/shellkeeper_32.png   shellkeeper.iconset/icon_16x16@2x.png
-          cp assets/icons/shellkeeper_32.png   shellkeeper.iconset/icon_32x32.png
-          cp assets/icons/shellkeeper_64.png   shellkeeper.iconset/icon_32x32@2x.png
-          cp assets/icons/shellkeeper_128.png  shellkeeper.iconset/icon_128x128.png
-          cp assets/icons/shellkeeper_256.png  shellkeeper.iconset/icon_128x128@2x.png
-          cp assets/icons/shellkeeper_256.png  shellkeeper.iconset/icon_256x256.png
-          cp assets/icons/shellkeeper_512.png  shellkeeper.iconset/icon_256x256@2x.png
-          cp assets/icons/shellkeeper_512.png  shellkeeper.iconset/icon_512x512.png
-          iconutil -c icns shellkeeper.iconset -o "${APP}/Contents/Resources/shellkeeper.icns"
-
-          cat > "${APP}/Contents/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleName</key>
-            <string>ShellKeeper</string>
-            <key>CFBundleDisplayName</key>
-            <string>ShellKeeper</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.shellkeeper.app</string>
-            <key>CFBundleVersion</key>
-            <string>${{ github.ref_name }}</string>
-            <key>CFBundleShortVersionString</key>
-            <string>${{ github.ref_name }}</string>
-            <key>CFBundleExecutable</key>
-            <string>shellkeeper</string>
-            <key>CFBundleIconFile</key>
-            <string>shellkeeper</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>LSMinimumSystemVersion</key>
-            <string>11.0</string>
-            <key>NSHighResolutionCapable</key>
-            <true/>
-          </dict>
-          </plist>
-          PLIST
-
-      - name: Package tarball
-        run: |
-          ARCHIVE="${BINARY_NAME}-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
-          tar -czf "${ARCHIVE}" ShellKeeper.app LICENSE README.md
-          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+      - name: Rename binary
+        run: cp target/${{ matrix.target }}/release/shellkeeper ${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARCHIVE }}
-          path: ${{ env.ARCHIVE }}
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
 
-  create-release:
+  release:
+    name: Create Release
     needs: [build-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
           merge-multiple: true
-
-      - name: List artifacts
-        run: find artifacts -type f | sort
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
           files: |
-            artifacts/*.tar.gz
-            artifacts/*.deb
+            shellkeeper-linux-x86_64
+            shellkeeper-macos-x86_64
+            shellkeeper-macos-aarch64
+            *.deb
+          generate_release_notes: true
