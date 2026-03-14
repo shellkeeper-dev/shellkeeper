@@ -61,8 +61,11 @@ jobs:
       - name: Build .rpm package
         run: cargo generate-rpm
 
-      - name: Rename binary
-        run: cp target/release/shellkeeper shellkeeper-${{ matrix.artifact_suffix }}
+      - name: Collect artifacts
+        run: |
+          cp target/release/shellkeeper shellkeeper-${{ matrix.artifact_suffix }}
+          cp target/debian/*.deb shellkeeper-${{ matrix.artifact_suffix }}.deb
+          cp target/generate-rpm/*.rpm shellkeeper-${{ matrix.artifact_suffix }}.rpm
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -70,8 +73,8 @@ jobs:
           name: ${{ matrix.artifact_suffix }}-artifacts
           path: |
             shellkeeper-${{ matrix.artifact_suffix }}
-            target/debian/*.deb
-            target/generate-rpm/*.rpm
+            shellkeeper-${{ matrix.artifact_suffix }}.deb
+            shellkeeper-${{ matrix.artifact_suffix }}.rpm
 
   build-macos:
     name: Build macOS (${{ matrix.target }})
@@ -127,9 +130,11 @@ jobs:
         with:
           files: |
             shellkeeper-linux-x86_64
+            shellkeeper-linux-x86_64.deb
+            shellkeeper-linux-x86_64.rpm
             shellkeeper-linux-aarch64
+            shellkeeper-linux-aarch64.deb
+            shellkeeper-linux-aarch64.rpm
             shellkeeper-macos-x86_64
             shellkeeper-macos-aarch64
-            *.deb
-            *.rpm
           generate_release_notes: true
