@@ -66,6 +66,52 @@ sudo apt remove shellkeeper
 
 ---
 
+## 🍎 macOS Setup
+
+ShellKeeper on macOS is distributed as a **pre-built binary**, not a package manager formula. Two additional dependencies must be installed manually before SSHFS mounts and password auth work correctly.
+
+### Running the binary
+
+Because the binary is not notarised, macOS Gatekeeper will block it on first launch. To allow it:
+
+1. Double-click (or run) `shellkeeper` — macOS will show a security warning.
+2. Open **System Settings → Privacy & Security**, scroll down to the blocked app notice, and click **Allow Anyway**.
+3. Re-run `shellkeeper`. Confirm the prompt that appears.
+
+Alternatively, remove the quarantine attribute from the terminal:
+```bash
+xattr -d com.apple.quarantine ./shellkeeper
+```
+
+### sshfs (required for directory mounts)
+
+sshfs on macOS requires [macFUSE](https://osxfuse.github.io/) as a kernel extension plus the `sshfs-mac` userspace tool:
+
+```bash
+brew install --cask macfuse
+brew install gromgit/fuse/sshfs-mac
+```
+
+After installing macFUSE you may need to **reboot** and allow the kernel extension in **System Settings → Privacy & Security → Security** before sshfs will work.
+
+### sshpass (required for saved-password auth)
+
+`sshpass` is not in the main Homebrew tap. Install it from a community tap:
+
+```bash
+brew install hudochenkov/sshpass/sshpass
+```
+
+> If you prefer not to add a third-party tap, you can build from source:
+> ```bash
+> brew install wget
+> wget https://sourceforge.net/projects/sshpass/files/sshpass/1.10/sshpass-1.10.tar.gz
+> tar xf sshpass-1.10.tar.gz && cd sshpass-1.10
+> ./configure && make && sudo make install
+> ```
+
+---
+
 ## 📋 Commands
 
 | Command | Description |
@@ -153,9 +199,8 @@ SSHFS MOUNTS                          [+ add mount]
 - **Auto-mount on connect** — mounts when the SSH tab opens; unmounts when the tab closes
 - **Status in tab tooltip** — hover a tab to see mount status (⊞ mounted / ○ not mounted)
 - **Error reporting** — if sshfs is missing or the mount fails, the tooltip shows the reason
-- Requires `sshfs` on the client (`apt install sshfs`); included in `.deb` dependencies
-
-> **macOS:** `brew install --cask macfuse && brew install gromgit/fuse/sshfs-mac`
+- **Linux:** `sshfs` is included in the `.deb` dependencies; for other distros: `sudo apt install sshfs` / `sudo dnf install fuse-sshfs` / `sudo pacman -S sshfs`
+- **macOS:** see [macOS Setup → sshfs](#-macos-setup) above — macFUSE kernel extension required
 
 ### Persistent Sessions (tmux)
 Enable **Persistent session** on any connection and ShellKeeper wraps the SSH call in:
@@ -303,7 +348,7 @@ Copyright 2026 David Zambrano Lizarazo (jdzl), Juan Fajardo.
 
 **SSHFS mount fails**
 → Check `sshfs` is installed: `which sshfs`. On Ubuntu: `sudo apt install sshfs`.
-→ On macOS: `brew install --cask macfuse && brew install gromgit/fuse/sshfs-mac`.
+→ On macOS: see [macOS Setup → sshfs](#-macos-setup) — macFUSE kernel extension and a reboot may be required.
 → Hover the tab tooltip to see the exact error message.
 
 **Paste not working**
