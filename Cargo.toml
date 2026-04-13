@@ -1,6 +1,6 @@
 [package]
 name = "shellkeeper"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "SSH connection manager with embedded terminal emulator"
 authors = ["David Zambrano Lizarazo <jdzl@gitlab.com>", "Juan Fajardo"]
