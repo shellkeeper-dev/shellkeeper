@@ -97,12 +97,6 @@ pub fn show(
             state.sel_end   = None;
         }
     }
-    // Lose focus when the user clicks anywhere outside the terminal area
-    // (e.g. sidebar search box, connections list, gear button).
-    // This lets those widgets receive keyboard input after being clicked.
-    if ui.input(|i| i.pointer.any_click()) && !term_resp.clicked() {
-        state.focused = false;
-    }
 
     // Border
     let border_col = if state.focused { c::BORDER_LIT() } else { c::BORDER() };
@@ -342,15 +336,6 @@ pub fn process_input(
     sessions:   &mut Vec<PtySession>,
     active_tab: usize,
 ) {
-    // Strip egui's keyboard focus from every widget so Tab never navigates
-    // to the sidebar search / gear button while the terminal owns input.
-    // surrender_focus(id) in egui 0.29 requires the id of the focused widget.
-    ctx.memory_mut(|m| {
-        if let Some(id) = m.focused() {
-            m.surrender_focus(id);
-        }
-    });
-
     // Ctrl+V → paste from clipboard (arboard, reliable on Wayland/X11)
     let ctrl_v = ctx.input_mut(|i| {
         if let Some(pos) = i.events.iter().position(|e| matches!(
