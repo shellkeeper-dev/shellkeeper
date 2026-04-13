@@ -278,61 +278,8 @@ pub fn show(
 
     drop(parser);
 
-    // ── Input ──────────────────────────────────────────────────────────────
-    if state.focused {
-        // Ctrl+V → paste from clipboard via arboard (reliable on Wayland/X11
-        // even before the window has full compositor focus)
-        let ctrl_v = ui.ctx().input_mut(|i| {
-            if let Some(pos) = i.events.iter().position(|e| matches!(
-                e,
-                egui::Event::Key { key: egui::Key::V, pressed: true, modifiers, .. }
-                if modifiers.ctrl && !modifiers.alt
-            )) {
-                i.events.remove(pos);
-                true
-            } else {
-                false
-            }
-        });
-        if ctrl_v {
-            if let Ok(mut cb) = Clipboard::new() {
-                if let Ok(text) = cb.get_text() {
-                    if let Some(s) = sessions.get_mut(active_tab) { s.write_input(text.as_bytes()); }
-                }
-            }
-        }
-
-        // Physically remove Ctrl+C from the event queue so egui never sees it
-        // as a "copy to clipboard" shortcut. We send 0x03 (SIGINT) ourselves.
-        let ctrl_c = ui.ctx().input_mut(|i| {
-            if let Some(pos) = i.events.iter().position(|e| matches!(
-                e,
-                egui::Event::Key { key: egui::Key::C, pressed: true, modifiers, .. }
-                if modifiers.ctrl && !modifiers.alt
-            )) {
-                i.events.remove(pos);
-                true
-            } else {
-                // egui 0.29 on Linux converts Ctrl+C → Event::Copy before we see Key
-                let copy_pos = i.events.iter().position(|e| matches!(e, egui::Event::Copy));
-                if let Some(pos) = copy_pos {
-                    i.events.remove(pos);
-                    true
-                } else {
-                    false
-                }
-            }
-        });
-        if ctrl_c {
-            if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&[0x03]); }
-        }
-
-        // Remaining keyboard + Paste events (Ctrl+V, middle-mouse on X11)
-        let bytes = collect_input(ui.ctx());
-        if !bytes.is_empty() {
-            if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&bytes); }
-        }
-    }
+    // Input is handled in process_input(), called from app.rs BEFORE any
+    // panel renders so egui cannot steal Tab / Ctrl+key events first.
 
     // Right-click context menu — common terminal actions + paste
     let ctx_resp = ui.interact(avail, ui.id().with("term_ctx"), egui::Sense::hover());
@@ -373,6 +320,65 @@ pub fn show(
 
     events.focused = state.focused;
     events
+}
+
+// ── Pre-frame input (called from app.rs BEFORE any panel renders) ────────────
+
+/// Consume and forward all keyboard input to the active PTY session.
+///
+/// **This must be called at the very start of `App::update()`, before any
+/// `SidePanel` / `CentralPanel` is rendered.**  If called later, egui will
+/// have already processed the same events for its own purposes (Tab focus
+/// navigation → gear button opens Settings; Ctrl+X/W/G → system shortcuts
+/// break nano), because egui's event queue is shared and read during layout.
+pub fn process_input(
+    ctx:        &egui::Context,
+    sessions:   &mut Vec<PtySession>,
+    active_tab: usize,
+) {
+    // Ctrl+V → paste from clipboard (arboard, reliable on Wayland/X11)
+    let ctrl_v = ctx.input_mut(|i| {
+        if let Some(pos) = i.events.iter().position(|e| matches!(
+            e,
+            egui::Event::Key { key: egui::Key::V, pressed: true, modifiers, .. }
+            if modifiers.ctrl && !modifiers.alt
+        )) {
+            i.events.remove(pos); true
+        } else { false }
+    });
+    if ctrl_v {
+        if let Ok(mut cb) = Clipboard::new() {
+            if let Ok(text) = cb.get_text() {
+                if let Some(s) = sessions.get_mut(active_tab) { s.write_input(text.as_bytes()); }
+            }
+        }
+    }
+
+    // Ctrl+C → SIGINT (0x03); also handle Event::Copy (egui's Linux alias)
+    let ctrl_c = ctx.input_mut(|i| {
+        if let Some(pos) = i.events.iter().position(|e| matches!(
+            e,
+            egui::Event::Key { key: egui::Key::C, pressed: true, modifiers, .. }
+            if modifiers.ctrl && !modifiers.alt
+        )) {
+            i.events.remove(pos); true
+        } else {
+            if let Some(pos) = i.events.iter().position(|e| matches!(e, egui::Event::Copy)) {
+                i.events.remove(pos); true
+            } else { false }
+        }
+    });
+    if ctrl_c {
+        if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&[0x03]); }
+    }
+
+    // All remaining input: keys (Tab, Esc, arrows, Ctrl+X/W/G…), text, paste.
+    // collect_input uses input_mut+retain so every consumed event is removed
+    // from egui's queue — nothing leaks to widgets rendered afterwards.
+    let bytes = collect_input(ctx);
+    if !bytes.is_empty() {
+        if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&bytes); }
+    }
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────

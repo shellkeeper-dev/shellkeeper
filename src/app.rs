@@ -233,7 +233,10 @@ impl SshedApp {
             self.open_conn(i, true);
             self.view = AppView::Terminal;
         }
-        if ev.open_settings { self.view = AppView::Settings; }
+        if ev.open_settings {
+            self.view = AppView::Settings;
+            self.terminal.focused = false; // stop pre-frame input capture immediately
+        }
         if let Some(name) = ev.theme_change {
             self.apply_theme_by_name(&name);
         }
@@ -309,6 +312,20 @@ impl eframe::App for SshedApp {
         // Push palette into thread-local so all UI helpers read the right colours.
         ui::set_palette(self.palette.clone());
         ui::apply_theme(ctx);
+
+        // ── Pre-frame terminal input ───────────────────────────────────────────
+        // Must run BEFORE any panel renders. egui processes its own event queue
+        // during layout/rendering, so if we wait until the terminal widget draws,
+        // the sidebar has already stolen Tab (focus nav → gear → Settings) and
+        // Ctrl+keys (system shortcuts → nano commands silently dropped).
+        if self.terminal.focused
+            && !self.dialog.open
+            && self.view == AppView::Terminal
+            && !self.sessions.is_empty()
+        {
+            let active = self.active_tab.min(self.sessions.len() - 1);
+            terminal::process_input(ctx, &mut self.sessions, active);
+        }
 
         // ── Sidebar ───────────────────────────────────────────────────────────
         let sidebar_events = egui::SidePanel::left("sidebar")
