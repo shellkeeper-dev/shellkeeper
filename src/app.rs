@@ -292,7 +292,10 @@ impl SshedApp {
 
     fn handle_settings(&mut self, ev: SettingsEvent) {
         match ev {
-            SettingsEvent::Close => { self.view = AppView::Terminal; }
+            SettingsEvent::Close => {
+                self.view = AppView::Terminal;
+                self.terminal.auto_focus = true; // re-focus terminal when returning from settings
+            }
             SettingsEvent::ThemeChanged(name) => { self.apply_theme_by_name(&name); }
             SettingsEvent::ConfigChanged => { let _ = self.config.save(); }
         }

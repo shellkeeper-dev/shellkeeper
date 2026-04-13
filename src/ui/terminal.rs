@@ -336,6 +336,17 @@ pub fn process_input(
     sessions:   &mut Vec<PtySession>,
     active_tab: usize,
 ) {
+    // Consume bare Space key events so egui widgets (e.g. the ⚙ gear button)
+    // cannot intercept Space as a button-activation when they have keyboard focus.
+    // The actual space character still reaches the PTY via Event::Text(" ").
+    ctx.input_mut(|i| {
+        i.events.retain(|e| !matches!(
+            e,
+            egui::Event::Key { key: egui::Key::Space, pressed: true, modifiers, .. }
+            if !modifiers.ctrl && !modifiers.alt && !modifiers.shift
+        ));
+    });
+
     // Ctrl+V → paste from clipboard (arboard, reliable on Wayland/X11)
     let ctrl_v = ctx.input_mut(|i| {
         if let Some(pos) = i.events.iter().position(|e| matches!(
