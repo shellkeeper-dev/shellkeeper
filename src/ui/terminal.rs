@@ -97,6 +97,12 @@ pub fn show(
             state.sel_end   = None;
         }
     }
+    // Lose focus when the user clicks anywhere outside the terminal area
+    // (e.g. sidebar search box, connections list, gear button).
+    // This lets those widgets receive keyboard input after being clicked.
+    if ui.input(|i| i.pointer.any_click()) && !term_resp.clicked() {
+        state.focused = false;
+    }
 
     // Border
     let border_col = if state.focused { c::BORDER_LIT() } else { c::BORDER() };
@@ -336,6 +342,10 @@ pub fn process_input(
     sessions:   &mut Vec<PtySession>,
     active_tab: usize,
 ) {
+    // Strip egui's keyboard focus from every widget so Tab never navigates
+    // to the sidebar search / gear button while the terminal owns input.
+    ctx.memory_mut(|m| m.surrender_focus());
+
     // Ctrl+V → paste from clipboard (arboard, reliable on Wayland/X11)
     let ctrl_v = ctx.input_mut(|i| {
         if let Some(pos) = i.events.iter().position(|e| matches!(
@@ -354,7 +364,9 @@ pub fn process_input(
         }
     }
 
-    // Ctrl+C → SIGINT (0x03); also handle Event::Copy (egui's Linux alias)
+    // Ctrl+C → SIGINT (0x03).
+    // On Linux egui sometimes converts Ctrl+C → Event::Copy before we see
+    // the Key event, so we handle both forms.
     let ctrl_c = ctx.input_mut(|i| {
         if let Some(pos) = i.events.iter().position(|e| matches!(
             e,
@@ -362,19 +374,40 @@ pub fn process_input(
             if modifiers.ctrl && !modifiers.alt
         )) {
             i.events.remove(pos); true
-        } else {
-            if let Some(pos) = i.events.iter().position(|e| matches!(e, egui::Event::Copy)) {
-                i.events.remove(pos); true
-            } else { false }
-        }
+        } else if let Some(pos) = i.events.iter().position(|e| matches!(e, egui::Event::Copy)) {
+            i.events.remove(pos); true
+        } else { false }
     });
     if ctrl_c {
         if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&[0x03]); }
     }
 
-    // All remaining input: keys (Tab, Esc, arrows, Ctrl+X/W/G…), text, paste.
-    // collect_input uses input_mut+retain so every consumed event is removed
-    // from egui's queue — nothing leaks to widgets rendered afterwards.
+    // Ctrl+X → 0x18 (nano exit, etc.).
+    // On Linux egui converts Ctrl+X → Event::Cut (same pattern as Ctrl+C → Copy).
+    // We must handle BOTH: the raw Key event and the synthetic Cut event.
+    let ctrl_x = ctx.input_mut(|i| {
+        if let Some(pos) = i.events.iter().position(|e| matches!(
+            e,
+            egui::Event::Key { key: egui::Key::X, pressed: true, modifiers, .. }
+            if modifiers.ctrl && !modifiers.alt
+        )) {
+            i.events.remove(pos);
+            // Also discard any paired Cut event so egui doesn't double-act
+            if let Some(cut) = i.events.iter().position(|e| matches!(e, egui::Event::Cut)) {
+                i.events.remove(cut);
+            }
+            true
+        } else if let Some(pos) = i.events.iter().position(|e| matches!(e, egui::Event::Cut)) {
+            i.events.remove(pos); true
+        } else { false }
+    });
+    if ctrl_x {
+        if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&[0x18]); }
+    }
+
+    // All remaining input: Tab, Esc, arrows, every other Ctrl+key, text, paste.
+    // collect_input uses input_mut+retain — every handled event is removed from
+    // egui's queue so nothing leaks to widgets rendered after this point.
     let bytes = collect_input(ctx);
     if !bytes.is_empty() {
         if let Some(s) = sessions.get_mut(active_tab) { s.write_input(&bytes); }
