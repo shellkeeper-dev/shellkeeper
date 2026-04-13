@@ -316,16 +316,52 @@ impl eframe::App for SshedApp {
         ui::set_palette(self.palette.clone());
         ui::apply_theme(ctx);
 
+        // ── Focus lock: keep Tab inside the terminal ────────────────────────────
+        // Hold egui keyboard focus on a non-rendered placeholder id and lock it
+        // so Tab keypresses do NOT trigger egui's focus-navigation (which would
+        // visually focus the sidebar search input or the ⚙ gear button).
+        //
+        // Mechanics:
+        //   • request_focus only when nothing has egui focus (avoids overriding
+        //     a sidebar search click that was handled earlier this frame).
+        //   • lock_focus(true) is honoured by egui's begin_frame on the *next*
+        //     frame, so Tab is already blocked by the time it could cause issues.
+        //   • When the user clicks outside the terminal, terminal::show() sets
+        //     terminal.focused = false; from that point we stop re-requesting
+        //     focus and surrender it so the clicked widget receives keys.
+        let term_egui_focus_id = egui::Id::new("terminal_keyboard_focus");
+        let terminal_active = self.terminal.focused
+            && !self.dialog.open
+            && self.view == AppView::Terminal
+            && !self.sessions.is_empty();
+        ctx.memory_mut(|m| {
+            if terminal_active {
+                // Only claim focus when no real widget has it (e.g. from a click)
+                let cur = m.focused();
+                if cur.is_none() || cur == Some(term_egui_focus_id) {
+                    m.request_focus(term_egui_focus_id);
+                }
+                // Claim all navigable keys so egui's focus system can't
+                // cycle Tab / arrows / Escape to sidebar widgets.
+                m.set_focus_lock_filter(term_egui_focus_id, egui::EventFilter {
+                    tab:               true,
+                    horizontal_arrows: true,
+                    vertical_arrows:   true,
+                    escape:            true,
+                });
+            } else if m.focused() == Some(term_egui_focus_id) {
+                // Terminal lost logical focus → hand egui focus back so the
+                // widget the user just clicked can receive keyboard events.
+                m.surrender_focus(term_egui_focus_id);
+            }
+        });
+
         // ── Pre-frame terminal input ───────────────────────────────────────────
         // Must run BEFORE any panel renders. egui processes its own event queue
         // during layout/rendering, so if we wait until the terminal widget draws,
         // the sidebar has already stolen Tab (focus nav → gear → Settings) and
         // Ctrl+keys (system shortcuts → nano commands silently dropped).
-        if self.terminal.focused
-            && !self.dialog.open
-            && self.view == AppView::Terminal
-            && !self.sessions.is_empty()
-        {
+        if terminal_active && !self.sessions.is_empty() {
             let active = self.active_tab.min(self.sessions.len() - 1);
             terminal::process_input(ctx, &mut self.sessions, active);
         }

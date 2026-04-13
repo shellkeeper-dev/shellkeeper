@@ -98,6 +98,24 @@ pub fn show(
         }
     }
 
+    // Unfocus when the user left-clicks outside the terminal area (e.g. the
+    // sidebar search input or any other UI widget).  Without this check,
+    // `terminal.focused` would remain `true` across frames and
+    // `process_input` would keep consuming every keystroke, making it
+    // impossible to type in any sidebar field after clicking it.
+    if state.focused {
+        let clicked_outside = ui.input(|i| {
+            i.pointer.primary_pressed()
+                && i.pointer
+                    .press_origin()
+                    .map(|p| !avail.contains(p))
+                    .unwrap_or(false)
+        });
+        if clicked_outside {
+            state.focused = false;
+        }
+    }
+
     // Border
     let border_col = if state.focused { c::BORDER_LIT() } else { c::BORDER() };
     ui.painter().rect_stroke(
@@ -450,10 +468,13 @@ pub fn collect_input(ctx: &egui::Context) -> Vec<u8> {
                 egui::Event::Key { key, pressed: true, modifiers, .. } => {
                     if let Some(seq) = key_sequence(key, modifiers) {
                         out.extend_from_slice(&seq);
-                        false // consumed — prevent egui from acting on this key
-                    } else {
-                        true // unknown combo — let egui handle it
                     }
+                    // Always consume every key-down event while the terminal is
+                    // focused — even unrecognised combos.  Returning `true` here
+                    // would leave the event in egui's queue, where it can trigger
+                    // Tab focus-navigation and move keyboard focus to sidebar
+                    // widgets (search box, gear button, etc.).
+                    false
                 }
                 _ => true, // keep all other events untouched
             }
@@ -463,6 +484,7 @@ pub fn collect_input(ctx: &egui::Context) -> Vec<u8> {
 }
 
 fn key_sequence(key: &Key, m: &Modifiers) -> Option<Vec<u8>> {
+    // ── Ctrl+key ──────────────────────────────────────────────────────────────
     if m.ctrl && !m.alt {
         let b: Option<u8> = match key {
             Key::A => Some(0x01), Key::B => Some(0x02), Key::C => Some(0x03),
@@ -477,12 +499,64 @@ fn key_sequence(key: &Key, m: &Modifiers) -> Option<Vec<u8>> {
             _ => None,
         };
         if let Some(b) = b { return Some(vec![b]); }
+
+        // Ctrl+arrows — word-jump sequences (xterm standard)
+        match key {
+            Key::ArrowLeft  => return Some(b"\x1b[1;5D".to_vec()),
+            Key::ArrowRight => return Some(b"\x1b[1;5C".to_vec()),
+            Key::ArrowUp    => return Some(b"\x1b[1;5A".to_vec()),
+            Key::ArrowDown  => return Some(b"\x1b[1;5B".to_vec()),
+            _ => {}
+        }
     }
 
+    // ── Alt+key → ESC-prefixed sequences ──────────────────────────────────────
+    // Alt sends ESC + the bare key.  This covers readline bindings like:
+    //   Alt+B / Alt+F  → backward/forward word
+    //   Alt+D          → delete word forward
+    //   Alt+Backspace  → delete word backward
+    //   Alt+arrows     → word jump (some terminals / tmux)
+    if m.alt && !m.ctrl {
+        match key {
+            Key::ArrowLeft  => return Some(b"\x1b[1;3D".to_vec()),
+            Key::ArrowRight => return Some(b"\x1b[1;3C".to_vec()),
+            Key::ArrowUp    => return Some(b"\x1b[1;3A".to_vec()),
+            Key::ArrowDown  => return Some(b"\x1b[1;3B".to_vec()),
+            Key::Backspace  => return Some(b"\x1b\x7f".to_vec()),
+            Key::Delete     => return Some(b"\x1b[3;3~".to_vec()),
+            _ => {}
+        }
+        // Alt+letter / Alt+digit: send ESC + the lowercase ASCII char
+        let ch: Option<char> = match key {
+            Key::A => Some('a'), Key::B => Some('b'), Key::C => Some('c'),
+            Key::D => Some('d'), Key::E => Some('e'), Key::F => Some('f'),
+            Key::G => Some('g'), Key::H => Some('h'), Key::I => Some('i'),
+            Key::J => Some('j'), Key::K => Some('k'), Key::L => Some('l'),
+            Key::M => Some('m'), Key::N => Some('n'), Key::O => Some('o'),
+            Key::P => Some('p'), Key::Q => Some('q'), Key::R => Some('r'),
+            Key::S => Some('s'), Key::T => Some('t'), Key::U => Some('u'),
+            Key::V => Some('v'), Key::W => Some('w'), Key::X => Some('x'),
+            Key::Y => Some('y'), Key::Z => Some('z'),
+            Key::Num0 => Some('0'), Key::Num1 => Some('1'), Key::Num2 => Some('2'),
+            Key::Num3 => Some('3'), Key::Num4 => Some('4'), Key::Num5 => Some('5'),
+            Key::Num6 => Some('6'), Key::Num7 => Some('7'), Key::Num8 => Some('8'),
+            Key::Num9 => Some('9'),
+            _ => None,
+        };
+        if let Some(c) = ch {
+            let mut seq = vec![0x1b_u8];
+            let mut buf = [0u8; 4];
+            seq.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+            return Some(seq);
+        }
+    }
+
+    // ── Plain keys ────────────────────────────────────────────────────────────
     Some(match key {
         Key::Enter     => vec![b'\r'],
         Key::Backspace => vec![0x7f],
-        Key::Tab       => vec![b'\t'],
+        // Shift+Tab sends the "backtab" sequence; plain Tab sends \t
+        Key::Tab       => if m.shift { b"\x1b[Z".to_vec() } else { vec![b'\t'] },
         Key::Escape    => vec![0x1b],
         Key::Delete    => b"\x1b[3~".to_vec(),
         Key::Home      => b"\x1b[H".to_vec(),
