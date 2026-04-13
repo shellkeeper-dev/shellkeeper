@@ -379,8 +379,12 @@ pub fn show(
 
 pub fn collect_input(ctx: &egui::Context) -> Vec<u8> {
     let mut out = Vec::new();
-    ctx.input(|i| {
-        for event in &i.events {
+    // Use input_mut so we can REMOVE every event we consume from egui's queue.
+    // Without this, egui would also process the same events after us, causing:
+    //   - Tab  → egui focus-navigation lands on the ⚙ gear / search box → Settings opens
+    //   - Ctrl+X/W/G/… → egui intercepts them as system shortcuts → nano breaks
+    ctx.input_mut(|i| {
+        i.events.retain(|event| {
             match event {
                 egui::Event::Text(text) => {
                     for ch in text.chars() {
@@ -389,25 +393,31 @@ pub fn collect_input(ctx: &egui::Context) -> Vec<u8> {
                             out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
                         }
                     }
+                    false // consumed — remove from egui queue
                 }
                 // Paste event: fired by Ctrl+V AND middle-mouse button on X11/Wayland
                 egui::Event::Paste(text) => {
                     out.extend_from_slice(text.as_bytes());
+                    false // consumed
                 }
                 // egui converts Ctrl+C → Event::Copy on some Linux setups.
                 // When the terminal is focused there is no selection to copy,
                 // so this is always SIGINT.
                 egui::Event::Copy => {
                     out.push(0x03);
+                    false // consumed
                 }
                 egui::Event::Key { key, pressed: true, modifiers, .. } => {
                     if let Some(seq) = key_sequence(key, modifiers) {
                         out.extend_from_slice(&seq);
+                        false // consumed — prevent egui from acting on this key
+                    } else {
+                        true // unknown combo — let egui handle it
                     }
                 }
-                _ => {}
+                _ => true, // keep all other events untouched
             }
-        }
+        });
     });
     out
 }
