@@ -346,7 +346,7 @@ pub fn process_input(
     // to the sidebar search / gear button while the terminal owns input.
     // surrender_focus(id) in egui 0.29 requires the id of the focused widget.
     ctx.memory_mut(|m| {
-        if let Some(id) = m.focus() {
+        if let Some(id) = m.focused() {
             m.surrender_focus(id);
         }
     });
