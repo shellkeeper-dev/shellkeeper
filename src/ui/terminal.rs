@@ -344,7 +344,12 @@ pub fn process_input(
 ) {
     // Strip egui's keyboard focus from every widget so Tab never navigates
     // to the sidebar search / gear button while the terminal owns input.
-    ctx.memory_mut(|m| m.surrender_focus());
+    // surrender_focus(id) in egui 0.29 requires the id of the focused widget.
+    ctx.memory_mut(|m| {
+        if let Some(id) = m.focus() {
+            m.surrender_focus(id);
+        }
+    });
 
     // Ctrl+V → paste from clipboard (arboard, reliable on Wayland/X11)
     let ctrl_v = ctx.input_mut(|i| {
